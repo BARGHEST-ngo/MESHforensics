@@ -128,7 +128,7 @@ func (s *Session) ADBAddr(clientID string) string {
 }
 
 func (s *Session) SetForwarding(clientID string, on bool) error {
-	if err := s.SetForwarding(clientID, on); err != nil {
+	if err := s.srv.SetForwarding(clientID, on); err != nil {
 		return err
 	}
 
