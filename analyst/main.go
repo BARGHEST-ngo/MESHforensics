@@ -9,15 +9,19 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"strings"
 
 	"github.com/BARGHEST-ngo/MESH/analyst/cmd"
 	"github.com/BARGHEST-ngo/MESH/analyst/session"
+	"github.com/BARGHEST-ngo/androidqf_mesh/utils"
 	"github.com/peterbourgon/ff/v3/ffcli"
 	"github.com/skip2/go-qrcode"
 )
 
 func main() {
+	setAndroidQFVersion()
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
@@ -64,7 +68,7 @@ func commands(s *session.Session, in *cmd.Input) *ffcli.Command {
 		Subcommands: []*ffcli.Command{
 			cmd.PinCmd(s),
 			cmd.AdbPairCmd(s, in),
-			cmd.AdbcollectCmd(),
+			cmd.AdbcollectCmd(s, in),
 			cmd.AdbdisableCmd(s, in),
 			cmd.AdbcleanCmd(s, in),
 			cmd.StatusCmd(s),
@@ -81,4 +85,24 @@ func commands(s *session.Session, in *cmd.Input) *ffcli.Command {
 		return nil
 	}
 	return root
+}
+
+// androidqf's own releases set utils.Version with -ldflags, MESHforensics does not do this
+// take it from the module version, acquisitions record it in their metadata
+func setAndroidQFVersion() {
+	if utils.Version != "" {
+		return
+	}
+
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return
+	}
+
+	for _, m := range info.Deps {
+		if m.Path == "github.com/BARGHEST-ngo/androidqf_mesh" {
+			utils.Version = m.Version
+			return
+		}
+	}
 }
