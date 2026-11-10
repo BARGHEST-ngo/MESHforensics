@@ -37,6 +37,7 @@ func New(out io.Writer) *Session {
 		out:     out,
 	}
 	s.srv = meshnet.NewServer(meshnet.ServerConfig{
+		Forward:              true,
 		OnClientConnected:    s.connected,
 		OnClientDisconnected: s.disconnected,
 	})
@@ -122,6 +123,18 @@ func (s *Session) ADBAddr(clientID string) string {
 	}
 
 	return d.adbAddr
+}
+
+func (s *Session) SetForwarding(clientID string, on bool) error {
+	if err := s.SetForwarding(clientID, on); err != nil {
+		return err
+	}
+
+	data := []byte("off")
+	if on {
+		data = []byte("on")
+	}
+	return s.srv.Send(clientID, meshnet.Message{Topic: "forward", Data: data})
 }
 
 func (s *Session) serveBridge(ln net.Listener, clientId, target string) {
