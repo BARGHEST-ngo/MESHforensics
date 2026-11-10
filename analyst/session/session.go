@@ -24,9 +24,10 @@ type Session struct {
 }
 
 type device struct {
-	info    meshnet.ClientInfo
-	bridges []net.Listener
-	adbAddr string
+	info       meshnet.ClientInfo
+	bridges    []net.Listener
+	adbAddr    string
+	forwarding bool
 }
 
 const streamOpenTimeout = 10 * time.Second
@@ -40,6 +41,7 @@ func New(out io.Writer) *Session {
 		Forward:              true,
 		OnClientConnected:    s.connected,
 		OnClientDisconnected: s.disconnected,
+		OnMessage:            s.message,
 	})
 	return s
 }
@@ -137,6 +139,28 @@ func (s *Session) SetForwarding(clientID string, on bool) error {
 	return s.srv.Send(clientID, meshnet.Message{Topic: "forward", Data: data})
 }
 
+func (s *Session) Forwarding(clientID string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	d := s.devices[clientID]
+	if d == nil {
+		return false
+	}
+
+	return d.forwarding
+}
+
+func (s *Session) ClientName(clientID string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	d := s.devices[clientID]
+	if d == nil {
+		return "unknown"
+	}
+
+	return d.info.Name
+}
+
 func (s *Session) serveBridge(ln net.Listener, clientId, target string) {
 	for {
 		local, err := ln.Accept()
@@ -181,4 +205,31 @@ func (s *Session) disconnected(c meshnet.ClientInfo, err error) {
 		return
 	}
 	fmt.Fprintf(s.out, "device disconnected: %s\n", c.Name)
+}
+
+func (s *Session) message(clientID string, m meshnet.Message) {
+	switch m.Topic {
+	case "forward":
+		s.handleForwardMsg(clientID, m)
+	default:
+		name := s.ClientName(clientID)
+		fmt.Fprintf(s.out, "%s sent an unexpected message (topic %q)\n", name, m.Topic)
+	}
+}
+
+func (s *Session) handleForwardMsg(clientID string, m meshnet.Message) {
+	on := string(m.Data) == "on"
+
+	s.mu.Lock()
+	d := s.devices[clientID]
+	if d == nil {
+		s.mu.Unlock()
+		return
+	}
+
+	d.forwarding = on
+	name := d.info.Name
+	s.mu.Unlock()
+
+	fmt.Fprintf(s.out, "%s: forwarding %v\\n", name, on)
 }
