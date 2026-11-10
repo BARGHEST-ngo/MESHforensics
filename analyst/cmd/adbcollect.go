@@ -161,7 +161,7 @@ func collect(ctx context.Context, addr string, opts collectOptions) error {
 
 	mods := modules.List()
 	for _, mod := range mods {
-		if (opts.module != "") && (opts.module != mod.Name()) {
+		if opts.module != "" && opts.module != mod.Name() {
 			continue
 		}
 		err = mod.InitStorage(acq.StoragePath)
