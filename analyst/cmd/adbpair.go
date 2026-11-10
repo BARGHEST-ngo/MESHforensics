@@ -8,18 +8,11 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"path/filepath"
 	"slices"
-	"time"
 
 	"github.com/BARGHEST-ngo/MESH/analyst/session"
 	meshnet "github.com/BARGHEST-ngo/MESHnet"
-	"github.com/BARGHEST-ngo/androidqf_mesh/acquisition"
 	"github.com/BARGHEST-ngo/androidqf_mesh/adb"
-	"github.com/BARGHEST-ngo/androidqf_mesh/log"
-	"github.com/BARGHEST-ngo/androidqf_mesh/modules"
-	rt "github.com/botherder/go-savetime/runtime"
-	"github.com/google/uuid"
 	"github.com/peterbourgon/ff/v3/ffcli"
 )
 
@@ -38,29 +31,24 @@ type PairingArgs struct {
 
 const maxAutoPairAttempts = 5
 
-var adbpairliteArgs struct {
-	qf bool
-}
-
 func AdbPairCmd(s *session.Session, in *Input) *ffcli.Command {
 	fs := flag.NewFlagSet("adbpair", flag.ContinueOnError)
-	runQF := fs.Bool("qf", false, "perform adbcollect (AndroidQF/WARD) immediately after connection")
 
 	return &ffcli.Command{
 		Name:       "adbpair",
-		ShortUsage: "adbpair [flags]",
+		ShortUsage: "adbpair",
 		ShortHelp:  "Pair & connect to a device's wireless debugging via ADB",
 		FlagSet:    fs,
 		Exec: func(ctx context.Context, args []string) error {
 			if len(args) > 0 {
 				return fmt.Errorf("unexpected arguments: %v", args)
 			}
-			return runAdbPair(ctx, args, s, in, *runQF)
+			return runAdbPair(ctx, args, s, in)
 		},
 	}
 }
 
-func runAdbPair(ctx context.Context, args []string, s *session.Session, in *Input, runQF bool) error {
+func runAdbPair(ctx context.Context, args []string, s *session.Session, in *Input) error {
 	dev, err := chooseDevice(ctx, s, in)
 	if err != nil {
 		return err
@@ -111,9 +99,6 @@ func runAdbPair(ctx context.Context, args []string, s *session.Session, in *Inpu
 	s.SetADBAddr(dev.ID, debugAddr)
 
 	fmt.Println("Device connected. You may proceed with the acquisition: run 'adbcollect'")
-	if runQF {
-		return qf(debugAddr)
-	}
 	return nil
 }
 
@@ -174,61 +159,5 @@ func validateConnect(addr string) error {
 	if !slices.Contains(devices, addr) {
 		return fmt.Errorf("device not connected through MESH (adb sees: %v)", devices)
 	}
-	return nil
-}
-
-func qf(serial string) error {
-	fmt.Println("Performing forensics acquisition")
-	fmt.Println("Starting androidqf")
-
-	acqUUID := uuid.New().String()
-
-	for {
-		var err error
-		serial, err = adb.Client.SetSerial(serial)
-		if err != nil {
-			log.Error(fmt.Sprintf("Error trying to connect over ADB: %s", err))
-		} else {
-			if _, err = adb.Client.GetState(); err == nil {
-				break
-			}
-			log.Debug(err)
-			log.Error("Unable to get device state. Please make sure it is connected and authorized. Trying again in 5 seconds...")
-		}
-		time.Sleep(5 * time.Second)
-	}
-
-	outputFolder := filepath.Join(rt.GetExecutableDirectory(), acqUUID)
-	acq, err := acquisition.New(outputFolder)
-	if err != nil {
-		return fmt.Errorf("impossible to initialise the acquisition: %w", err)
-	}
-
-	log.Info(fmt.Sprintf("Started new acquisition in %s", acq.StoragePath))
-
-	for _, mod := range modules.List() {
-		if err := mod.InitStorage(acq.StoragePath); err != nil {
-			log.Infof("ERROR: failed to initialize storage for module %s: %v", mod.Name(), err)
-			continue
-		}
-		if err := mod.Run(acq, false); err != nil {
-			log.Infof("ERROR: failed to run module %s: %v", mod.Name(), err)
-		}
-	}
-
-	if err := acq.HashFiles(); err != nil {
-		log.ErrorExc("Failed to generate list of file hashes", err)
-		return err
-	}
-
-	acq.StoreInfo()
-
-	if err := acq.StoreSecurely(); err != nil {
-		log.ErrorExc("Something failed while encrypting the acquisition", err)
-		log.Warning("WARNING: The secure storage of the acquisition folder failed! The data is unencrypted!")
-	}
-
-	acq.Complete()
-	log.Info("Acquisition completed.")
 	return nil
 }
