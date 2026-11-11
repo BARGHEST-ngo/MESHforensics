@@ -73,8 +73,12 @@ open class IPNService : VpnService() {
   }
 
   private fun onForwardRequest(on: Boolean) {
-    if (on && !MeshnetSession.isForwarding) startForwarding()
-    if (!on) MeshnetSession.stopForwarding()
+    try {
+      if (on && !MeshnetSession.isForwarding) startForwarding()
+      if (!on) MeshnetSession.stopForwarding()
+    } catch (e: Exception) {
+      Log.e(TAG, "forward request failed: ${e.message}")
+    }
     MeshnetSession.reportForwarding()
   }
 
