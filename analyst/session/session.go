@@ -24,8 +24,10 @@ type Session struct {
 }
 
 type device struct {
-	info    meshnet.ClientInfo
-	bridges []net.Listener
+	info       meshnet.ClientInfo
+	bridges    []net.Listener
+	adbAddr    string
+	forwarding bool
 }
 
 const streamOpenTimeout = 10 * time.Second
@@ -36,8 +38,10 @@ func New(out io.Writer) *Session {
 		out:     out,
 	}
 	s.srv = meshnet.NewServer(meshnet.ServerConfig{
+		Forward:              true,
 		OnClientConnected:    s.connected,
 		OnClientDisconnected: s.disconnected,
+		OnMessage:            s.message,
 	})
 	return s
 }
@@ -54,6 +58,10 @@ func (s *Session) NewPairing() (string, error) {
 	return s.srv.NewPairing()
 }
 
+func (s *Session) PairingPIN() string {
+	return s.srv.PairingPIN()
+}
+
 func (s *Session) Clients() []meshnet.ClientInfo {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -65,6 +73,10 @@ func (s *Session) Clients() []meshnet.ClientInfo {
 		})
 	}
 	return out
+}
+
+func (s *Session) Disconnect(clientID string) error {
+	return s.srv.DisconnectClient(clientID)
 }
 
 // BridgeADB lets local adb reach a port on the device.
@@ -92,6 +104,61 @@ func (s *Session) BridgeADB(clientID string, devicePort int) (localAddr string, 
 
 	go s.serveBridge(ln, clientID, fmt.Sprintf("adb:%d", devicePort))
 	return ln.Addr().String(), nil
+}
+
+func (s *Session) SetADBAddr(clientID, addr string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	d := s.devices[clientID]
+	if d == nil {
+		return
+	}
+	d.adbAddr = addr
+}
+
+func (s *Session) ADBAddr(clientID string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	d := s.devices[clientID]
+	if d == nil {
+		return ""
+	}
+
+	return d.adbAddr
+}
+
+func (s *Session) SetForwarding(clientID string, on bool) error {
+	if err := s.srv.SetForwarding(clientID, on); err != nil {
+		return err
+	}
+
+	data := []byte("off")
+	if on {
+		data = []byte("on")
+	}
+	return s.srv.Send(clientID, meshnet.Message{Topic: "forward", Data: data})
+}
+
+func (s *Session) Forwarding(clientID string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	d := s.devices[clientID]
+	if d == nil {
+		return false
+	}
+
+	return d.forwarding
+}
+
+func (s *Session) ClientName(clientID string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	d := s.devices[clientID]
+	if d == nil {
+		return "unknown"
+	}
+
+	return d.info.Name
 }
 
 func (s *Session) serveBridge(ln net.Listener, clientId, target string) {
@@ -138,4 +205,31 @@ func (s *Session) disconnected(c meshnet.ClientInfo, err error) {
 		return
 	}
 	fmt.Fprintf(s.out, "device disconnected: %s\n", c.Name)
+}
+
+func (s *Session) message(clientID string, m meshnet.Message) {
+	switch m.Topic {
+	case "forward":
+		s.handleForwardMsg(clientID, m)
+	default:
+		name := s.ClientName(clientID)
+		fmt.Fprintf(s.out, "%s sent an unexpected message (topic %q)\n", name, m.Topic)
+	}
+}
+
+func (s *Session) handleForwardMsg(clientID string, m meshnet.Message) {
+	on := string(m.Data) == "on"
+
+	s.mu.Lock()
+	d := s.devices[clientID]
+	if d == nil {
+		s.mu.Unlock()
+		return
+	}
+
+	d.forwarding = on
+	name := d.info.Name
+	s.mu.Unlock()
+
+	fmt.Fprintf(s.out, "%s: forwarding %v\\n", name, on)
 }

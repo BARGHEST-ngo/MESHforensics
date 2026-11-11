@@ -9,19 +9,24 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"strings"
 
 	"github.com/BARGHEST-ngo/MESH/analyst/cmd"
 	"github.com/BARGHEST-ngo/MESH/analyst/session"
+	"github.com/BARGHEST-ngo/androidqf_mesh/utils"
 	"github.com/peterbourgon/ff/v3/ffcli"
 	"github.com/skip2/go-qrcode"
 )
 
 func main() {
+	setAndroidQFVersion()
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
-	s := session.New(os.Stdout)
+	in := cmd.NewInput(os.Stdin)
+	s := session.New(in.Output())
 	addr, err := s.Start()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "start: %v\n", err)
@@ -37,7 +42,6 @@ func main() {
 	fmt.Println(qr.ToSmallString(false))
 	fmt.Printf("MESH address: %s\n\nRun 'pin' to pair a device\n", addr)
 
-	in := cmd.NewInput(os.Stdin)
 	for {
 		line, err := in.ReadLine(ctx, "meshcli> ")
 		if err != nil {
@@ -64,10 +68,11 @@ func commands(s *session.Session, in *cmd.Input) *ffcli.Command {
 		Subcommands: []*ffcli.Command{
 			cmd.PinCmd(s),
 			cmd.AdbPairCmd(s, in),
-			cmd.AdbcollectCmd(),
-			cmd.AdbdisableCmd(),
-			cmd.AdbcleanCmd(),
-			cmd.StatusCmd(),
+			cmd.AdbcollectCmd(s, in),
+			cmd.AdbdisableCmd(s, in),
+			cmd.AdbcleanCmd(s, in),
+			cmd.StatusCmd(s),
+			cmd.DisconnectCmd(s, in),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			fmt.Fprintf(os.Stderr, "Run 'meshcli help' for usage.\n")
@@ -80,4 +85,24 @@ func commands(s *session.Session, in *cmd.Input) *ffcli.Command {
 		return nil
 	}
 	return root
+}
+
+// androidqf's own releases set utils.Version with -ldflags, MESHforensics does not do this
+// take it from the module version, acquisitions record it in their metadata
+func setAndroidQFVersion() {
+	if utils.Version != "" {
+		return
+	}
+
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return
+	}
+
+	for _, m := range info.Deps {
+		if m.Path == "github.com/BARGHEST-ngo/androidqf_mesh" {
+			utils.Version = m.Version
+			return
+		}
+	}
 }
