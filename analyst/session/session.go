@@ -231,5 +231,5 @@ func (s *Session) handleForwardMsg(clientID string, m meshnet.Message) {
 	name := d.info.Name
 	s.mu.Unlock()
 
-	fmt.Fprintf(s.out, "%s: forwarding %v\\n", name, on)
+	fmt.Fprintf(s.out, "%s: forwarding %v\n", name, on)
 }

@@ -73,6 +73,7 @@ func commands(s *session.Session, in *cmd.Input) *ffcli.Command {
 			cmd.AdbcleanCmd(s, in),
 			cmd.StatusCmd(s),
 			cmd.DisconnectCmd(s, in),
+			cmd.ForwardCmd(s, in),
 		},
 		Exec: func(ctx context.Context, args []string) error {
 			fmt.Fprintf(os.Stderr, "Run 'meshcli help' for usage.\n")
