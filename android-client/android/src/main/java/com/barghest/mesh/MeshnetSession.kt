@@ -23,7 +23,7 @@ import org.barghest.meshnet.meshnetmobile.Stream
 // in memory here, never put in an Intent and never logged.
 object MeshnetSession {
   private const val TAG = "MeshnetSession"
-  private const val HELLO_TOPIC = "hello"
+  private const val FORWARD_TOPIC = "forward"
 
   private class Pairing(val serverAddr: String, val pin: String)
 
@@ -42,6 +42,10 @@ object MeshnetSession {
   // "Disconnected", "Errored") from a Go goroutine, not the main thread.
   @Volatile var onState: ((String) -> Unit)? = null
 
+  // Set by IPNService. Called with true/false when the server asks to start or stop forwarding.
+  @Volatile var onForwardRequest: ((Boolean) -> Unit)? = null
+  @Volatile var isForwarding = false
+    private set
   // prepare stores the pairing details for the next start(). A PIN works once, so
   // start() consumes them.
   @Synchronized
@@ -77,7 +81,11 @@ object MeshnetSession {
 
             // gomobile passes an empty Go slice as null.
             override fun onMessage(topic: String, data: ByteArray?) {
-              Log.d(TAG, "message: $topic (${data?.size ?: 0} bytes)")
+              if (gen != generation.get()) return
+              when (topic) {
+                FORWARD_TOPIC -> onForwardRequest?.invoke(data?.decodeToString() == "on")
+                else -> Log.d(TAG, "ignoring message: $topic")
+              }
             }
 
             override fun onStreamRequest(target: String, stream: Stream) {
@@ -106,9 +114,6 @@ object MeshnetSession {
         // Blocks until the handshake finishes or fails.
         c.connect()
         Log.d(TAG, "connected, client id ${c.id()}")
-        // A first message so the analyst's side can see the channel works.
-        c.send(HELLO_TOPIC, "Hello from ${Build.MODEL}".toByteArray())
-        Log.d(TAG, "sent $HELLO_TOPIC message")
       } catch (e: Exception) {
         Log.e(TAG, "connect failed: ${e.message}")
       }
@@ -128,6 +133,7 @@ object MeshnetSession {
     return try {
       c.startForwarding(vpn.detachFd().toLong())
       Log.d(TAG, "forwarding started")
+      isForwarding = true
       true
     } catch (e: Exception) {
       Log.e(TAG, "start forwarding failed: ${e.message}")
@@ -138,6 +144,16 @@ object MeshnetSession {
   // stops forwarding and closes the fd
   fun stopForwarding() {
     client?.stopForwarding()
+    isForwarding = false
+  }
+
+  fun reportForwarding() {
+    val state = if (isForwarding) "on" else "off"
+    try {
+      client?.send(FORWARD_TOPIC, state.toByteArray())
+    } catch (e: Exception) {
+      Log.e(TAG, "report forwarding: ${e.message}")
+    }
   }
 
   private fun allowedAdbPort(target: String): Int? {
@@ -169,7 +185,10 @@ object MeshnetSession {
   // Called from a Go goroutine, not the main thread.
   private fun onStateChange(gen: Int, state: String, err: String) {
     if (err.isEmpty()) Log.d(TAG, "state: $state") else Log.e(TAG, "state: $state: $err")
-    if (state != "Connecting" && state != "Connected") isActive = false
+    if (state != "Connecting" && state != "Connected") {
+      isActive = false
+      isForwarding = false
+    }
     publishState(state)
     onState?.invoke(state)
   }

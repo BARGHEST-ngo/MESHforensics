@@ -9,6 +9,7 @@
 // under AGPL-3.0-or-later. See LICENSE for details.
 package com.barghest.mesh
 
+import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -53,6 +54,7 @@ open class IPNService : VpnService() {
     // grab app to make sure it initializes
     app = App.get()
     MeshnetSession.onState = ::onMeshnetState
+    MeshnetSession.onForwardRequest = ::onForwardRequest
   }
 
   // MESHnet: called for each state of the MESHnet session, from a Go goroutine. The
@@ -62,13 +64,18 @@ open class IPNService : VpnService() {
       "Connecting" -> {}
       "Connected" -> {
         updateVpnStatus(true)
-        startForwarding()
       }
       else -> {
         updateVpnStatus(false)
         stopSelf()
       }
     }
+  }
+
+  private fun onForwardRequest(on: Boolean) {
+    if (on && !MeshnetSession.isForwarding) startForwarding()
+    if (!on) MeshnetSession.stopForwarding()
+    MeshnetSession.reportForwarding()
   }
 
   private fun startForwarding() {
@@ -183,6 +190,7 @@ open class IPNService : VpnService() {
 
   override fun onDestroy() {
     MeshnetSession.onState = null
+    MeshnetSession.onForwardRequest = null
     close()
     updateVpnStatus(false)
     super.onDestroy()
