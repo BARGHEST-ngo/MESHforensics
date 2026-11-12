@@ -1,17 +1,11 @@
 FROM golang:1.27.1-alpine@sha256:8a5910f31396cd4d89662f56c68b3ae31d374308270a1c3bd96672ee5ed43414 AS build
 
-RUN apk add --no-cache git patch
-
 WORKDIR /usr/src/app
 
-# Disable workspace so each module resolves independently
+# Disable workspace so the analyst resolves on its own
 ENV GOWORK=off
 
-# Cache root module deps (used by tailscale submodule build)
-COPY go.mod go.sum ./
-RUN go mod download
-
-# Cache analyst module deps separately
+# Cache analyst module deps
 COPY analyst/go.mod analyst/go.sum ./analyst/
 RUN cd analyst && go mod download
 
