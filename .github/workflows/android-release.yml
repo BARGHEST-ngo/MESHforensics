@@ -7,8 +7,6 @@ on:
   pull_request:  # Build-only: verify reproducibility without publishing
     paths:
       - 'android-client/**'
-      - 'go.mod'
-      - 'go.sum'
       - '.github/workflows/android-release.yml'
   workflow_dispatch:  # Allows manual trigger from GitHub UI
     inputs:
@@ -33,11 +31,6 @@ jobs:
     steps:
       - name: Check out code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: "go.mod"
 
       - name: Set up Java 21
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
@@ -120,11 +113,6 @@ jobs:
     steps:
       - name: Check out code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: "go.mod"
 
       - name: Set up Java 21
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
