@@ -125,9 +125,15 @@ release: jarsign-env $(RELEASE_AAB)
 .PHONY: gradle-dependencies
 gradle-dependencies: $(shell find android -type f -not -path "android/build/*" -not -path '*/.*') $(MESHNET_AAR)
 
+MESHNET_VERSION := v0.1.1-alpha
+MESHNET_SHA256 := 497e746d449389a0a324dfc023fc794bb63be2e393290c4244fe46ae4df4a364
+MESHNET_AAR := android/libs/meshnet.aar
 $(MESHNET_AAR):
-	@echo "Missing $@: download meshnet.aar from a MESHnet release, or build it with MESHnet's scripts/build-aar.sh" >&2
-	@exit 1
+	mkdir -p $(dir $@)
+	curl --silent --show-error --fail --location --output $@.tmp \
+		"https://github.com/BARGHEST-ngo/MESHnet/releases/download/$(MESHNET_VERSION)/meshnet-$(MESHNET_VERSION).aar"
+	echo "$(MESHNET_SHA256)  $@.tmp" | shasum -a 256 -c -
+	mv $@.tmp $@
 
 $(RELEASE_AAB): gradle-dependencies
 	@echo "Building release AAB"
