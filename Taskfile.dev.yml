@@ -31,8 +31,6 @@ tasks:
   buildAnalyst:
     desc: Build MESH analyst client for local development
     cmd: ./analyst/src/build.sh
-    deps:
-      - submoduleInit
 
   buildAndroid:
     desc: Build MESH Android client
@@ -52,14 +50,14 @@ tasks:
   clean:
     desc: Clean up build artifacts
     cmds:
-      - rm -f analyst/mesh analyst/tailscale analyst/tailscaled
+      - rm -f analyst/mesh
       - make -C android-client clean
 
   tagRelease:
     desc: >-
       Prepare a release: bump versionCode/versionName, update fdroid metadata,
-      tag the main repo and tailscale submodule. Does NOT push — prints push
-      commands on success. Usage: task tagRelease VERSION=0.1.6-alpha
+      tag the main repo. Does NOT push — prints push commands on success.
+      Usage: task tagRelease VERSION=0.1.6-alpha
     requires:
       vars:
         - VERSION
@@ -88,11 +86,3 @@ tasks:
     desc: Pin GitHub Actions to a hash
     cmds:
       - go tool github.com/stacklok/frizbee actions .github/workflows
-
-#################################
-# Internal tasks
-#################################
-
-  submoduleInit:
-    internal: true
-    cmd: git submodule update --init --recursive

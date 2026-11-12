@@ -1,17 +1,11 @@
 FROM golang:1.27.1-alpine@sha256:8a5910f31396cd4d89662f56c68b3ae31d374308270a1c3bd96672ee5ed43414 AS build
 
-RUN apk add --no-cache git patch
-
 WORKDIR /usr/src/app
 
-# Disable workspace so each module resolves independently
+# Disable workspace so the analyst resolves on its own
 ENV GOWORK=off
 
-# Cache root module deps (used by tailscale submodule build)
-COPY go.mod go.sum ./
-RUN go mod download
-
-# Cache analyst module deps separately
+# Cache analyst module deps
 COPY analyst/go.mod analyst/go.sum ./analyst/
 RUN cd analyst && go mod download
 
@@ -22,7 +16,6 @@ FROM debian:trixie-slim@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         adb \
-        iptables \
         iproute2 \
         iputils-ping \
         libcap2-bin \
@@ -36,7 +29,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
                 --shell /bin/bash mesh \
     && mkdir -p /home/mesh/acquisitions \
     && chown -R mesh:mesh /home/mesh \
-    && setcap cap_net_admin,cap_net_raw+eip /usr/bin/tcpdump
+    && setcap cap_net_raw+eip /usr/bin/tcpdump
 
 # MVT (Mobile Verification Toolkit) for offline analysis of adbcollect output:
 # Installed into a venv so the Debian-managed python3 stays untouched,
@@ -63,3 +56,4 @@ COPY --chmod=755        analyst/entrypoint.sh            /usr/bin/entrypoint.sh
 WORKDIR /home/mesh/acquisitions
 
 ENTRYPOINT ["/usr/bin/entrypoint.sh"]
+CMD ["meshcli"]
