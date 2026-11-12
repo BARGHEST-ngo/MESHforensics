@@ -168,9 +168,6 @@ object NetworkChangeCallback {
       TSLog.d(
           TAG,
           "${why}: updated DNS config for network ${defaultNetwork} (${info.linkProps.interfaceName})")
-      // FAKE(meshnet): libtailscale is removed, so the Go backend is no longer
-      // told about DNS changes. The DNS config above is still tracked.
-      // Libtailscale.onDNSConfigChanged(info.linkProps.interfaceName)
     }
   }
 }

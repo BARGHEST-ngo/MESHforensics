@@ -9,7 +9,6 @@
 // under AGPL-3.0-or-later. See LICENSE for details.
 package com.barghest.mesh
 
-import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -21,30 +20,15 @@ import com.barghest.mesh.mdm.MDMSettings
 import com.barghest.mesh.ui.model.Ipn
 import com.barghest.mesh.ui.notifier.Notifier
 import com.barghest.mesh.util.TSLog
-import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-// FAKE(meshnet): libtailscale is removed.
-// import libtailscale.Libtailscale
 
-// FAKE(meshnet): libtailscale is removed, so this no longer implements libtailscale.IPNService.
-// The Go backend used to call id, updateVpnStatus, close, disconnectVPN and newBuilder.
-// Nothing calls newBuilder now, so no VPN tunnel is ever established.
-// open class IPNService : VpnService(), libtailscale.IPNService {
 open class IPNService : VpnService() {
   private val TAG = "IPNService"
-  private val randomID: String = UUID.randomUUID().toString()
   private lateinit var app: App
   val scope = CoroutineScope(Dispatchers.IO)
 
-  // override fun id(): String {
-  fun id(): String {
-    return randomID
-  }
-
-  // override fun updateVpnStatus(status: Boolean) {
   fun updateVpnStatus(status: Boolean) {
     app.getAppScopedViewModel().setVpnActive(status)
   }
@@ -130,66 +114,30 @@ open class IPNService : VpnService() {
         ACTION_START_VPN -> {
           scope.launch { showForegroundNotification() }
           app.setWantRunning(true)
-          // MESHnet: the MESHnet session takes the place of the Go backend's VPN.
-          // Libtailscale.requestVPN(this)
+
           if (!startMeshnet() && !MeshnetSession.isActive) {
             // Nothing to run: don't leave a "Connected" notification behind.
             close()
           }
           // Not sticky: a restart could not reconnect, because a PIN works once.
-          // START_STICKY
           START_NOT_STICKY
         }
-        "android.net.VpnService" -> {
-          // This means we were started by Android due to Always On VPN.
-          // We show a non-foreground notification because we weren't
-          // started as a foreground service.
-          scope.launch {
-            // Collect the first value of hideDisconnectAction asynchronously.
-            val hideDisconnectAction = MDMSettings.forceEnabled.flow.first()
-            val exitNodeName =
-                UninitializedApp.getExitNodeName(Notifier.prefs.value, Notifier.netmap.value)
-            app.notifyStatus(true, hideDisconnectAction.value, exitNodeName)
-          }
-          app.setWantRunning(true)
-          // FAKE(meshnet): Always On VPN starts us with no pairing details, and a
-          // MESHnet PIN works once, so there is nothing to reconnect with.
-          // Libtailscale.requestVPN(this)
-          startMeshnet()
-          START_STICKY
-        }
         else -> {
-          // This means that we were restarted after the service was killed
-          // (potentially due to OOM).
-          if (UninitializedApp.get().isAbleToStartVPN()) {
-            scope.launch { showForegroundNotification() }
-            App.get()
-            // FAKE(meshnet): restarted after being killed, with no pairing details,
-            // so there is nothing to reconnect with.
-            // Libtailscale.requestVPN(this)
-            startMeshnet()
-            START_STICKY
-          } else {
-            START_NOT_STICKY
+          // Started by Android rather than the app: Always-On VPN ("android.net.VpnService"), or a restart.
+          // Pairing details are never stored and a PIN works once, so there is nothing to reconnect with.#
+          if (!MeshnetSession.isActive) {
+            TSLog.d(TAG, "started by Android with no pairing, stopping")
+            close()
           }
+          START_NOT_STICKY
         }
       }
 
-  // override fun close() {
   fun close() {
     Notifier.setState(Ipn.State.Stopping)
-    disconnectVPN()
-    // FAKE(meshnet): libtailscale is removed. The backend used to report Stopped after this call,
-    // report it here so the UI doesn't stay on Stopping.
-    // Libtailscale.serviceDisconnect(this)
-    // MESHnet: closing the service ends the MESHnet session.
+    stopSelf()
     MeshnetSession.disconnect()
     Notifier.setState(Ipn.State.Stopped)
-  }
-
-  // override fun disconnectVPN() {
-  fun disconnectVPN() {
-    stopSelf()
   }
 
   override fun onDestroy() {
@@ -205,10 +153,6 @@ open class IPNService : VpnService() {
     close()
     updateVpnStatus(false)
     super.onRevoke()
-  }
-
-  private fun setVpnPrepared(isPrepared: Boolean) {
-    app.getAppScopedViewModel().setVpnPrepared(isPrepared)
   }
 
   private fun showForegroundNotification(
@@ -246,7 +190,6 @@ open class IPNService : VpnService() {
     }
   }
 
-  // override fun newBuilder(): VPNServiceBuilder {
   fun newBuilder(): VPNServiceBuilder {
     val b: Builder =
         Builder()
@@ -285,8 +228,8 @@ open class IPNService : VpnService() {
   }
 
   companion object {
-    const val ACTION_START_VPN = "com.barghest.com.barghest.com.barghest.com.barghest.mesh.START_VPN"
-    const val ACTION_STOP_VPN = "com.barghest.com.barghest.com.barghest.com.barghest.mesh.STOP_VPN"
-    const val ACTION_RESTART_VPN = "com.barghest.com.barghest.com.barghest.com.barghest.mesh.RESTART_VPN"
+    const val ACTION_START_VPN = "com.barghest.mesh.START_VPN"
+    const val ACTION_STOP_VPN = "com.barghest.mesh.STOP_VPN"
+    const val ACTION_RESTART_VPN = "com.barghest.mesh.RESTART_VPN"
   }
 }
