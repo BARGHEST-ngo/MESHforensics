@@ -11,37 +11,25 @@
 package com.barghest.mesh.ui.localapi
 
 import android.content.Context
-import com.barghest.mesh.App
 import com.barghest.mesh.ui.model.BugReportID
-import com.barghest.mesh.ui.model.Errors
 import com.barghest.mesh.ui.model.Ipn
 import com.barghest.mesh.ui.model.IpnLocal
 import com.barghest.mesh.ui.model.IpnState
 import com.barghest.mesh.ui.model.StableNodeID
 import com.barghest.mesh.ui.model.Tailcfg
-import com.barghest.mesh.ui.util.InputStreamAdapter
 import com.barghest.mesh.util.TSLog
-import java.nio.charset.Charset
 import kotlin.reflect.KType
 import kotlin.reflect.typeOf
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.decodeFromStream
-import kotlinx.serialization.serializer
-// FAKE(meshnet): libtailscale is removed.
-// import libtailscale.FilePart
 
 private object Endpoint {
-  const val DEBUG = "debug"
-  const val DEBUG_LOG = "debug-log"
   const val BUG_REPORT = "bugreport"
   const val PREFS = "prefs"
   const val FILE_TARGETS = "file-targets"
-  const val UPLOAD_METRICS = "upload-client-metrics"
   const val START = "start"
   const val LOGIN_INTERACTIVE = "login-interactive"
   const val RESET_AUTH = "reset-auth"
@@ -50,12 +38,7 @@ private object Endpoint {
   const val PROFILES_CURRENT = "profiles/current"
   const val STATUS = "status"
   const val TKA_STATUS = "tka/status"
-  const val TKA_SIGN = "tka/sign"
-  const val TKA_VERIFY_DEEP_LINK = "tka/verify-deeplink"
   const val PING = "ping"
-  const val FILES = "files"
-  const val FILE_PUT = "file-put"
-  const val TAILFS_SERVER_ADDRESS = "tailfs/fileserver-address"
   const val ENABLE_EXIT_NODE = "set-use-exit-node-enabled"
 }
 
@@ -78,10 +61,6 @@ private fun noBackendError() = Exception("no backend: libtailscale removed, MESH
  */
 class Client(private val scope: CoroutineScope) {
   private val TAG = Client::class.simpleName
-
-  // FAKE(meshnet): libtailscale is removed, so there is no backend to call.
-  // Access libtailscale.Application lazily
-  // private val app: libtailscale.Application by lazy { App.get().getLibtailscaleApp() }
 
   fun start(options: Ipn.Options, responseHandler: (Result<Unit>) -> Unit) {
     val body = Json.encodeToString(options).toByteArray()
@@ -181,40 +160,6 @@ class Client(private val scope: CoroutineScope) {
       files: Collection<Ipn.OutgoingFile>,
       responseHandler: (Result<String>) -> Unit
   ) {
-    // FAKE(meshnet): libtailscale is removed, so there is nothing to upload to.
-    // Fail without opening the files the backend used to close their streams.
-    // val manifest = Json.encodeToString(files)
-    // val manifestPart = FilePart()
-    // manifestPart.body = InputStreamAdapter(manifest.byteInputStream(Charset.defaultCharset()))
-    // manifestPart.filename = "manifest.json"
-    // manifestPart.contentType = "application/json"
-    // val parts = mutableListOf(manifestPart)
-    //
-    // try {
-    //   parts.addAll(
-    //       files.map { file ->
-    //         val stream =
-    //             context.contentResolver.openInputStream(file.uri)
-    //                 ?: throw Exception("Error opening file stream")
-    //
-    //         val part = FilePart()
-    //         part.filename = file.Name
-    //         part.contentLength = file.DeclaredSize
-    //         part.body = InputStreamAdapter(stream)
-    //         part
-    //       })
-    // } catch (e: Exception) {
-    //   parts.forEach { it.body.close() }
-    //   TSLog.e(TAG, "Error creating file upload body: $e")
-    //   responseHandler(Result.failure(e))
-    //   return
-    // }
-    //
-    // return postMultipart(
-    //     "${Endpoint.FILE_PUT}/${peerId}",
-    //     FileParts(parts),
-    //     responseHandler,
-    // )
     scope.launch { responseHandler(Result.failure(noBackendError())) }
   }
 
@@ -265,23 +210,6 @@ class Client(private val scope: CoroutineScope) {
         .execute()
   }
 
-  // FAKE(meshnet): libtailscale is removed; only putTaildropFiles used this.
-  // private inline fun <reified T> postMultipart(
-  //     path: String,
-  //     parts: FileParts,
-  //     noinline responseHandler: (Result<T>) -> Unit
-  // ) {
-  //   Request(
-  //           scope = scope,
-  //           method = "POST",
-  //           path = path,
-  //           parts = parts,
-  //           timeoutMillis = 24 * 60 * 60 * 1000, // 24 hours
-  //           responseType = typeOf<T>(),
-  //           responseHandler = responseHandler)
-  //       .execute()
-  // }
-
   private inline fun <reified T> patch(
       path: String,
       body: ByteArray? = null,
@@ -316,8 +244,6 @@ class Request<T>(
     private val method: String,
     path: String,
     private val body: ByteArray? = null,
-    // FAKE(meshnet): libtailscale is removed, so there are no multipart requests.
-    // private val parts: FileParts? = null,
     private val timeoutMillis: Long = 30000,
     private val responseType: KType,
     private val responseHandler: (Result<T>) -> Unit
@@ -326,16 +252,7 @@ class Request<T>(
 
   companion object {
     private const val TAG = "LocalAPIRequest"
-
     private val jsonDecoder = Json { ignoreUnknownKeys = true }
-
-    // FAKE(meshnet): libtailscale is removed, so there is no backend handle.
-    // private lateinit var app: libtailscale.Application
-    //
-    // @JvmStatic
-    // fun setApp(newApp: libtailscale.Application) {
-    //   app = newApp
-    // }
   }
 
   @OptIn(ExperimentalSerializationApi::class)
@@ -344,64 +261,6 @@ class Request<T>(
     // Every request fails and callers take the failure path they already have for backend errors.
     TSLog.d(TAG, "FAKE(meshnet): no backend for request:${method}:${fullPath}")
     scope.launch { responseHandler(Result.failure(noBackendError())) }
-    // scope.launch(Dispatchers.IO) {
-    //   TSLog.d(TAG, "Executing request:${method}:${fullPath} on app $app")
-    //   try {
-    //     val resp =
-    //         if (parts != null) app.callLocalAPIMultipart(timeoutMillis, method, fullPath, parts)
-    //         else
-    //             app.callLocalAPI(
-    //                 timeoutMillis,
-    //                 method,
-    //                 fullPath,
-    //                 body?.let { InputStreamAdapter(it.inputStream()) })
-    //     // TODO: use the streaming body for performance
-    //     // An empty body is a perfectly valid response and indicates success
-    //     val respData = resp.bodyBytes() ?: ByteArray(0)
-    //
-    //     @Suppress("UNCHECKED_CAST")
-    //     val response: Result<T> =
-    //         when (responseType) {
-    //           typeOf<String>() -> Result.success(respData.decodeToString() as T)
-    //           typeOf<Unit>() -> Result.success(Unit as T)
-    //           else ->
-    //               try {
-    //                 Result.success(
-    //                     jsonDecoder.decodeFromStream(
-    //                         Json.serializersModule.serializer(responseType), respData.inputStream())
-    //                         as T)
-    //               } catch (t: Throwable) {
-    //                 // If we couldn't parse the response body, assume it's an error response
-    //                 try {
-    //                   val error =
-    //                       jsonDecoder.decodeFromStream<Errors.GenericError>(respData.inputStream())
-    //                   throw Exception(error.error)
-    //                 } catch (t: Throwable) {
-    //                   Result.failure(t)
-    //                 }
-    //               }
-    //         }
-    //     if (resp.statusCode() >= 400) {
-    //       throw Exception(
-    //           "Request failed with status ${resp.statusCode()}: ${respData.toString(Charset.defaultCharset())}")
-    //     }
-    //     // The response handler will invoked internally by the request parser
-    //     scope.launch { responseHandler(response) }
-    //   } catch (e: Exception) {
-    //     TSLog.e(TAG, "Error executing request:${method}:${fullPath}: $e")
-    //     scope.launch { responseHandler(Result.failure(e)) }
-    //   }
-    // }
+
   }
 }
-
-// FAKE(meshnet): libtailscale is removed, so this no longer implements libtailscale.FileParts and nothing uses it.
-// class FileParts(private val parts: List<FilePart>) : libtailscale.FileParts {
-//   override fun get(i: Int): FilePart {
-//     return parts[i]
-//   }
-//
-//   override fun len(): Int {
-//     return parts.size
-//   }
-// }

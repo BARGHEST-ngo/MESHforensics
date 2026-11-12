@@ -10,22 +10,14 @@
 
 package com.barghest.mesh.ui.notifier
 
-import com.barghest.mesh.App
-import com.barghest.mesh.ui.model.Empty
 import com.barghest.mesh.ui.model.Health
 import com.barghest.mesh.ui.model.Ipn
-import com.barghest.mesh.ui.model.Ipn.Notify
 import com.barghest.mesh.ui.model.Netmap
-import com.barghest.mesh.ui.util.set
 import com.barghest.mesh.util.TSLog
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.launch
 import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.decodeFromStream
 
 // Notifier is a wrapper around the IPN Bus notifier.  It provides a way to watch
 // for changes in various parts of the Tailscale engine.  You will typically only use
@@ -37,79 +29,24 @@ import kotlinx.serialization.json.decodeFromStream
 // unwatchIPNBus with the sessionId.
 object Notifier {
   private val TAG = Notifier::class.simpleName
-  private val decoder = Json { ignoreUnknownKeys = true }
-
-  // General IPN Bus State
-  // FAKE(meshnet): libtailscale is removed, so nothing ever reports a state. Start at NeedsLogin so the UI shows
-  // its signed-out screens instead of waiting on NoState forever.
-  // private val _state = MutableStateFlow(Ipn.State.NoState)
   private val _state = MutableStateFlow(Ipn.State.NeedsLogin)
   val state: StateFlow<Ipn.State> = _state
   val netmap: StateFlow<Netmap.NetworkMap?> = MutableStateFlow(null)
   val prefs: StateFlow<Ipn.Prefs?> = MutableStateFlow(null)
-  val engineStatus: StateFlow<Ipn.EngineStatus?> = MutableStateFlow(null)
-  val tailFSShares: StateFlow<Map<String, String>?> = MutableStateFlow(null)
-  val browseToURL: StateFlow<String?> = MutableStateFlow(null)
-  val loginFinished: StateFlow<String?> = MutableStateFlow(null)
   val version: StateFlow<String?> = MutableStateFlow(null)
   val health: StateFlow<Health.State?> = MutableStateFlow(null)
 
   // Taildrop-specific State
   val outgoingFiles: StateFlow<List<Ipn.OutgoingFile>?> = MutableStateFlow(null)
-  val incomingFiles: StateFlow<List<Ipn.PartialFile>?> = MutableStateFlow(null)
-  val filesWaiting: StateFlow<Empty.Message?> = MutableStateFlow(null)
-
-  // FAKE(meshnet): libtailscale is removed, so there is no backend handle to hold and no notification watcher to manage.
-  // private lateinit var app: libtailscale.Application
-  // private var manager: libtailscale.NotificationManager? = null
-
-  // @Synchronized
-  // @JvmStatic
-  // fun setApp(newApp: libtailscale.Application) {
-  //   app = newApp
-  // }
 
   @Synchronized
   @OptIn(ExperimentalSerializationApi::class)
   fun start(scope: CoroutineScope) {
     TSLog.d(TAG, "Starting Notifier")
-    // FAKE(meshnet): libtailscale is removed
-    // if (!::app.isInitialized) {
-    //   App.get()
-    // }
-    // scope.launch(Dispatchers.IO) {
-    //   val mask =
-    //       NotifyWatchOpt.Netmap.value or
-    //           NotifyWatchOpt.Prefs.value or
-    //           NotifyWatchOpt.InitialState.value or
-    //           NotifyWatchOpt.InitialHealthState.value or
-    //           NotifyWatchOpt.RateLimitNetmaps.value
-    //   manager =
-    //       app.watchNotifications(mask.toLong()) { notification ->
-    //         val notify = decoder.decodeFromStream<Notify>(notification.inputStream())
-    //         notify.State?.let { state.set(Ipn.State.fromInt(it)) }
-    //         notify.NetMap?.let(netmap::set)
-    //         notify.Prefs?.let(prefs::set)
-    //         notify.Engine?.let(engineStatus::set)
-    //         notify.TailFSShares?.let(tailFSShares::set)
-    //         notify.BrowseToURL?.let(browseToURL::set)
-    //         notify.LoginFinished?.let { loginFinished.set(it.property) }
-    //         notify.Version?.let(version::set)
-    //         notify.OutgoingFiles?.let(outgoingFiles::set)
-    //         notify.FilesWaiting?.let(filesWaiting::set)
-    //         notify.IncomingFiles?.let(incomingFiles::set)
-    //         notify.Health?.let(health::set)
-    //       }
-    // }
   }
 
   fun stop() {
     TSLog.d(TAG, "Stopping Notifier")
-    // FAKE(meshnet): libtailscale is removed, so there is no watcher to stop.
-    // manager?.let {
-    //   it.stop()
-    //   manager = null
-    // }
   }
 
   // NotifyWatchOpt is a bitmask of options supplied to the notifier to specify which

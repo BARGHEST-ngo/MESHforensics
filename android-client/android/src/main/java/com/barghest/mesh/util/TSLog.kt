@@ -64,13 +64,6 @@ object TSLog {
   }
 
   class LibtailscaleWrapper {
-    // FAKE(meshnet): libtailscale is removed, so logs are no longer forwarded to the Go backend.
-    // They still go to Logcat via the calls above.
-    // Kept because TimeUtilTest mocks this class.
-    //    public fun sendLog(tag: String?, message: String) {
-    //      val logTag = tag ?: ""
-    //      Libtailscale.sendLog((logTag + ": " + message).toByteArray(Charsets.UTF_8))
-    //    }
     public fun sendLog(tag: String?, message: String) {}
   }
 }
