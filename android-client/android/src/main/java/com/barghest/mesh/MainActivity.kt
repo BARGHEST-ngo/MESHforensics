@@ -619,7 +619,7 @@ class MainActivity : ComponentActivity() {
                             // payload. Anything else is a MESHnet server address, paired
                             // with the PIN shown on the analyst's screen.
                             if (uri.startsWith("mesh://")) {
-                                handleMeshIntent(Intent(Intent.ACTION_VIEW, Uri.parse(uri)))
+                                processMeshUri(Uri.parse(uri))
                             } else {
                                 pinInput { pin ->
                                     // IPNService runs the session. It needs VPN
@@ -634,7 +634,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-        handleMeshIntent(intent)
     }
 
     private fun showOtherVPNConflictDialog() {
@@ -747,10 +746,9 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun handleMeshIntent(intent: Intent) {
-        if (intent.action != Intent.ACTION_VIEW || intent.data?.scheme != "mesh") return
+    private fun processMeshUri(uri: Uri) {
         val blob =
-            intent.data?.getQueryParameter("d") ?: run {
+            uri.getQueryParameter("d") ?: run {
                 Log.e("MainActivity", "mesh intent: missing payload")
                 return
             }
@@ -782,7 +780,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        handleMeshIntent(intent)
         if (intent.getBooleanExtra(START_AT_ROOT, false)) {
             if (this::navController.isInitialized) {
                 val previousEntry = navController.previousBackStackEntry
