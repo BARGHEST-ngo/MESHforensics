@@ -18,7 +18,10 @@ export SOURCE_DATE_EPOCH ?= $(shell git log -1 --format=%ct 2>/dev/null || echo 
 DEBUG_APK := mesh-debug.apk
 RELEASE_AAB := mesh-release.aab
 
-# The MESHnet library, from a MESHnet release or built with MESHnet's scripts/build-aar.sh.
+# The MESHnet library downloaded from a MESHnet release
+# Keep MESHNET_VERSION in sync with the analyst's go.mod
+MESHNET_VERSION := v0.1.1-alpha
+MESHNET_SHA256 := 497e746d449389a0a324dfc023fc794bb63be2e393290c4244fe46ae4df4a364
 MESHNET_AAR := android/libs/meshnet.aar
 
 # Android SDK & Tools settings.
@@ -125,9 +128,6 @@ release: jarsign-env $(RELEASE_AAB)
 .PHONY: gradle-dependencies
 gradle-dependencies: $(shell find android -type f -not -path "android/build/*" -not -path '*/.*') $(MESHNET_AAR)
 
-MESHNET_VERSION := v0.1.1-alpha
-MESHNET_SHA256 := 497e746d449389a0a324dfc023fc794bb63be2e393290c4244fe46ae4df4a364
-MESHNET_AAR := android/libs/meshnet.aar
 $(MESHNET_AAR):
 	mkdir -p $(dir $@)
 	curl --silent --show-error --fail --location --output $@.tmp \
