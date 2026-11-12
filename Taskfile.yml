@@ -3,133 +3,26 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 version: '3'
-
-vars:
-  API_KEY_EXPIRATION: 3h
-
-dotenv:
-  - .env
-
 silent: true
-
 tasks:
-
-#################################
-# User-facing tasks
-#################################
-
   build:
-    desc: Build MESH Docker containers
+    desc: Build MESHforensics Docker containers
     cmds:
       - docker compose build
 
   down:
-    desc: Stop MESH Docker containers
+    desc: Stop MESHforensics Docker containers
     cmds:
       - |
-        rm -f .env
         docker compose down
-        printf "\033[1;32mControl plane stopped.\033[0m\n"
+        printf "\033[1;32mMESHforensics analyst stopped.\033[0m\n"
 
   analyst:
-    desc: Enter an interactive shell in the MESH analyst client container
+    desc: Start the MESHforensics analyst CLI
     cmds:
-      - docker compose up -d --build analyst
-      - docker compose exec --user mesh analyst /bin/bash
-      
-#################################
-# Internal tasks
-#################################
-  confirmDotEnv:
+      - docker compose run --rm --build --name mesh-analyst analyst
+
+  shell:
+    desc: Open a shell in the running analyst e.g. for tcpdump
     cmds:
-      - defer: '{{if .EXIT_CODE}}rm -f .env && printf "\033[1;33mConfiguration cleared. Run task controlPlane to start again.\033[0m\n"{{end}}'
-      - task confirmConfig 2>/dev/null
-
-  proxyType:
-    internal: true
-    if: 'grep -q "CONTROL_PLANE_TYPE=Ephemeral" .env 2>/dev/null'
-    cmds:
-      - |
-        printf "\033[1;36m╔═══════════════════════════════════╗\033[0m\n"
-        printf "\033[1;36m║\033[0m\033[1;37m Choose a domain for your network: \033[0m\033[1;36m║\033[0m\n"
-        printf "\033[1;36m╚═══════════════════════════════════╝\033[0m\n"
-      - task: promptProxyType
-
-  promptProxyType:
-    internal: true
-    if: 'grep -q "CONTROL_PLANE_TYPE=Ephemeral" .env 2>/dev/null'
-    requires:
-      vars:
-        - name: PROXY_DOMAIN_TYPE
-          enum:
-            - Manual (You will provision a domain)
-    vars:
-      PROXY_DOMAIN_TYPE_VALUE: "{{.PROXY_DOMAIN_TYPE}}"
-      FINAL_PROXY_DOMAIN_TYPE: '{{if .PROXY_DOMAIN_TYPE_VALUE | contains "Automatic"}}Automatic{{else}}Manual{{end}}'
-    cmd: echo PROXY_DOMAIN_TYPE={{.FINAL_PROXY_DOMAIN_TYPE}} >> .env && printf "\033[1;32m{{.FINAL_PROXY_DOMAIN_TYPE}} domain selected.\033[0m\n\n"
-
-  manualDomain:
-    internal: true
-    if: '[ -z "$CONTROL_PLANE_DOMAIN" ] && grep -q "PROXY_DOMAIN_TYPE=Manual" .env 2>/dev/null'
-    cmds:
-      - |
-        printf "\033[1;36m╔═════════════════════════════════════════════════════════════════════════════════════╗\033[0m\n"
-        printf "\033[1;36m║\033[0m\033[1;37m What domain name will be used to access your control plane (e.g. mesh.example.com)? \033[0m\033[1;36m║\033[0m\n"
-        printf "\033[1;36m╚═════════════════════════════════════════════════════════════════════════════════════╝\033[0m\n"
-        printf "\033[1;35mThis can be a domain name you own or one provided by your tunneling service.\033[0m\n"
-        printf "\033[1;35mLeave blank to use "localhost" (only for testing).\033[0m\n"
-      - task: promptManualDomain
-
-  promptManualDomain:
-    internal: true
-    requires:
-      vars:
-        - CONTROL_PLANE_DOMAIN
-    vars:
-      CONTROL_PLANE_DOMAIN_VALUE: '{{.CONTROL_PLANE_DOMAIN | default "localhost"}}'
-      CONTROL_PLANE_DOMAIN_ONLY: '{{.CONTROL_PLANE_DOMAIN_VALUE | replace "http://" "" | replace "https://" "" | trimAll " "}}'
-      DEFAULT_CORS_ORIGIN: https://{{.CONTROL_PLANE_DOMAIN_ONLY}}
-    cmds:
-      - printf "\033[1;32mDomain name set to {{.CONTROL_PLANE_DOMAIN_ONLY}}.\033[0m\n\n"
-      - echo "CONTROL_PLANE_DOMAIN={{.CONTROL_PLANE_DOMAIN_ONLY}}" >> .env
-      - echo "CORS_ORIGIN={{.CORS_ORIGIN | default .DEFAULT_CORS_ORIGIN }}" >> .env
-      - echo "CONTROL_PLANE_URL=https://{{.CONTROL_PLANE_DOMAIN_ONLY}}" >> .env
-    deps:
-      - createDotEnv
-
-  loginUrl:
-    internal: true
-    if: '! grep -q "CONTROL_PLANE_TYPE=Ephemeral" .env 2>/dev/null && [ -z "$LOGIN_URL" ]'
-    cmds:
-      - |
-        printf "\033[1;36m╔═════════════════════════════════════════════════════╗\033[0m\n"
-        printf "\033[1;36m║\033[0m\033[1;37m What is the URL of the control plane to connect to? \033[0m\033[1;36m║\033[0m\n"
-        printf "\033[1;36m╚═════════════════════════════════════════════════════╝\033[0m\n"
-      - task: promptLoginUrl
-
-  promptLoginUrl:
-    internal: true
-    requires:
-      vars:
-        - LOGIN_URL
-    vars:
-      LOGIN_URL_VALUE: '{{.LOGIN_URL}}'
-      FINAL_LOGIN_URL: '{{if not (.LOGIN_URL_VALUE | hasPrefix "http")}}https://{{end}}{{.LOGIN_URL_VALUE}}'
-    cmds:
-      - printf "\033[1;32mLogin URL set to {{.FINAL_LOGIN_URL}}.\033[0m\n\n"
-      - echo "LOGIN_URL={{.FINAL_LOGIN_URL}}" >> .env
-    deps:
-      - createDotEnv
-
-  createDotEnv:
-    internal: true
-    cmd: '[ -f .env ] || (touch .env && chmod 600 .env)'
-
-  confirmConfig:
-    cmds:
-      - |
-        printf "\033[1;36mConfiguration:\033[0m\n"
-        printf "Control plane type : {{.CONTROL_PLANE_TYPE}}\n"
-        printf "Proxy domain type  : {{.PROXY_DOMAIN_TYPE}}\n"
-        printf "Control plane URL  : {{.CONTROL_PLANE_URL}}\n"
-        printf "\n"
+      - docker exec -it --user mesh mesh-analyst bash
