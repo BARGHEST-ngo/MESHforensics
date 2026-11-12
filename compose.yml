@@ -3,22 +3,14 @@ services:
     build:
       context: .
       dockerfile: analyst/Dockerfile
+    # NET_RAW lets tcpdump capture forwarded device traffic.
+    # Bridged networking keeps the analyst in its own network namespace.
     cap_add:
-      - NET_ADMIN
       - NET_RAW
-    devices:
-      - /dev/net/tun:/dev/net/tun
-    # Bridged networking preserves netns isolation between the analyst (which
-    # talks to potentially-hostile devices) and the host's network stack.
-    # The WireGuard/MagicSock UDP port is pinned in entrypoint.sh (MESH_PORT)
-    # and published below so peers can reach this node without host networking.
-    ports:
-      - "${MESH_PORT:-41641}:${MESH_PORT:-41641}/udp"
     volumes:
       # Default outside the repo tree: acquisitions hold pulled APKs and a
       # device backup and must not land in the working copy. Override with
       # ACQUISITION_DIR in .env to point at a dedicated evidence store.
       - ${ACQUISITION_DIR:-${HOME}/mesh-acquisitions}:/home/mesh/acquisitions:z
-
-volumes:
-  analyst-data:
+    stdin_open: true
+    tty: true

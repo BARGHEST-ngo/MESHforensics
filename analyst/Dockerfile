@@ -22,7 +22,6 @@ FROM debian:trixie-slim@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         adb \
-        iptables \
         iproute2 \
         iputils-ping \
         libcap2-bin \
@@ -36,7 +35,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
                 --shell /bin/bash mesh \
     && mkdir -p /home/mesh/acquisitions \
     && chown -R mesh:mesh /home/mesh \
-    && setcap cap_net_admin,cap_net_raw+eip /usr/bin/tcpdump
+    && setcap cap_net_raw+eip /usr/bin/tcpdump
 
 # MVT (Mobile Verification Toolkit) for offline analysis of adbcollect output:
 # Installed into a venv so the Debian-managed python3 stays untouched,
@@ -63,3 +62,4 @@ COPY --chmod=755        analyst/entrypoint.sh            /usr/bin/entrypoint.sh
 WORKDIR /home/mesh/acquisitions
 
 ENTRYPOINT ["/usr/bin/entrypoint.sh"]
+CMD ["meshcli"]
