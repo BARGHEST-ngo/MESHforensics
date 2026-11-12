@@ -9,12 +9,14 @@
 // under AGPL-3.0-or-later. See LICENSE for details.
 package com.barghest.mesh
 
+import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.VpnService
 import android.os.Build
 import android.system.OsConstants
+import android.util.Log
 import com.barghest.mesh.mdm.MDMSettings
 import com.barghest.mesh.ui.model.Ipn
 import com.barghest.mesh.ui.notifier.Notifier
@@ -52,6 +54,7 @@ open class IPNService : VpnService() {
     // grab app to make sure it initializes
     app = App.get()
     MeshnetSession.onState = ::onMeshnetState
+    MeshnetSession.onForwardRequest = ::onForwardRequest
   }
 
   // MESHnet: called for each state of the MESHnet session, from a Go goroutine. The
@@ -59,12 +62,47 @@ open class IPNService : VpnService() {
   private fun onMeshnetState(state: String) {
     when (state) {
       "Connecting" -> {}
-      "Connected" -> updateVpnStatus(true)
+      "Connected" -> {
+        updateVpnStatus(true)
+      }
       else -> {
         updateVpnStatus(false)
         stopSelf()
       }
     }
+  }
+
+  private fun onForwardRequest(on: Boolean) {
+    try {
+      if (on && !MeshnetSession.isForwarding) startForwarding()
+      if (!on) MeshnetSession.stopForwarding()
+    } catch (e: Exception) {
+      Log.e(TAG, "forward request failed: ${e.message}")
+    }
+    MeshnetSession.reportForwarding()
+  }
+
+  private fun startForwarding() {
+    val b = newBuilder()
+    // made-up private addresses for the VPN interface.
+    b.addAddress("10.111.222.1", 32)
+    b.addAddress("fd00:6d65:7368::1", 128)
+    b.addRoute("0.0.0.0", 0)
+    b.addRoute("::", 0)
+    // Keep the local network local (Android 13+ only; older versions send it to the server, which refuses it)
+    for ((ip, bits) in listOf(
+      "10.0.0.0" to 8, "172.16.0.0" to 12, "192.168.0.0" to 16,
+      "169.254.0.0" to 16, "fc00::" to 7, "fe80::" to 10)) {
+      b.excludeRoute(ip, bits)
+    }
+    b.addDNSServer("1.1.1.1")
+    b.setMTU(1280) // must match MESHnet's forwardMTU
+    val vpn = b.establishVpn()
+    if (vpn == null) {
+      Log.e(TAG, "VPN not established: permission not granted")
+      return
+    }
+    if (!MeshnetSession.startForwarding(vpn)) Log.e(TAG, "forwarding did not start")
   }
 
   // MESHnet: connects with the pairing details the UI handed to MeshnetSession.
@@ -156,12 +194,14 @@ open class IPNService : VpnService() {
 
   override fun onDestroy() {
     MeshnetSession.onState = null
+    MeshnetSession.onForwardRequest = null
     close()
     updateVpnStatus(false)
     super.onDestroy()
   }
 
   override fun onRevoke() {
+    MeshnetSession.stopForwarding()
     close()
     updateVpnStatus(false)
     super.onRevoke()
@@ -236,6 +276,9 @@ open class IPNService : VpnService() {
         TSLog.d(TAG, "Disallowing app: $disallowedPackageName")
         disallowApp(b, disallowedPackageName)
       }
+
+      // MESHnet: tailcat's own traffic must not go into the VPN it carries
+      disallowApp(b, packageName)
     }
 
     return VPNServiceBuilder(b)
