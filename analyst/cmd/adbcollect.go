@@ -108,8 +108,15 @@ func runcollectCmd(ctx context.Context, args []string, s *session.Session, in *I
 		return err
 	}
 
+	output := adbcollectArgs.output
+	if output == "" {
+		if output, err = s.CollectionDir(dev.ID); err != nil {
+			return err
+		}
+	}
+
 	return collect(ctx, addr, collectOptions{
-		output: adbcollectArgs.output,
+		output: output,
 		module: adbcollectArgs.module,
 		fast:   adbcollectArgs.fast != "",
 	})

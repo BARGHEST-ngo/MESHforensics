@@ -34,12 +34,12 @@ func StatusCmd(s *session.Session) *ffcli.Command {
 		ShortUsage: "status [--active] [--web] [--json]",
 		ShortHelp:  "Show state of MESH network and its connections",
 		Exec: func(ctx context.Context, args []string) error {
-			return runStatus(ctx, args, s)
+			return runStatus(s)
 		},
 	}
 }
 
-func runStatus(ctx context.Context, args []string, s *session.Session) error {
+func runStatus(s *session.Session) error {
 	pin := s.PairingPIN()
 	if pin == "" {
 		fmt.Println("Pairing: none, run 'pin' to pair a device.")
@@ -51,6 +51,10 @@ func runStatus(ctx context.Context, args []string, s *session.Session) error {
 	fmt.Printf("Devices: %d connected\n", len(devices))
 	for _, d := range devices {
 		fmt.Printf("\t%q\t%s\n", d.Name, shortID(d.ID))
+	}
+
+	if path := s.CapturePath(); path != "" {
+		fmt.Printf("Capture: running, writing to %s\n", path)
 	}
 	return nil
 }

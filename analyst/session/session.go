@@ -8,8 +8,12 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
 
 	meshnet "github.com/BARGHEST-ngo/MESHnet"
 	"github.com/tailscale/tailcat"
@@ -21,13 +25,16 @@ type Session struct {
 
 	mu      sync.Mutex
 	devices map[string]*device
+	capture *capture
 }
 
 type device struct {
-	info       meshnet.ClientInfo
-	bridges    []net.Listener
-	adbAddr    string
-	forwarding bool
+	info           meshnet.ClientInfo
+	bridges        []net.Listener
+	adbAddr        string
+	forwarding     bool
+	acquisitionDir string // "" until adbcollect or capture is first called
+	collected      bool
 }
 
 const streamOpenTimeout = 10 * time.Second
@@ -51,6 +58,7 @@ func (s *Session) Start() (string, error) {
 }
 
 func (s *Session) Stop() error {
+	s.StopCapture()
 	return s.srv.Stop()
 }
 
@@ -128,6 +136,14 @@ func (s *Session) ADBAddr(clientID string) string {
 }
 
 func (s *Session) SetForwarding(clientID string, on bool) error {
+	if on {
+		s.mu.Lock()
+		blocked := s.capture != nil && s.capture.clientID != clientID
+		s.mu.Unlock()
+		if blocked {
+			return ErrCapturing
+		}
+	}
 	if err := s.srv.SetForwarding(clientID, on); err != nil {
 		return err
 	}
@@ -159,6 +175,61 @@ func (s *Session) ClientName(clientID string) string {
 	}
 
 	return d.info.Name
+}
+
+// Returns the device's acquisition folder, creating if none exists
+func (s *Session) AcquisitionDir(clientID string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	d := s.devices[clientID]
+	if d == nil {
+		return "", meshnet.ErrUnknownClient
+	}
+
+	if d.acquisitionDir == "" {
+		dir, err := s.newAcquisitionDir()
+		if err != nil {
+			return "", err
+		}
+		d.acquisitionDir = dir
+		d.collected = false
+	}
+	return d.acquisitionDir, nil
+}
+
+// Returns the folder for a new adbcollect run.
+// First collection shares its folder with any existing pcap, repeated collection gets a new directory
+func (s *Session) CollectionDir(clientID string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	d := s.devices[clientID]
+	if d == nil {
+		return "", meshnet.ErrUnknownClient
+	}
+
+	if d.acquisitionDir == "" || d.collected {
+		dir, err := s.newAcquisitionDir()
+		if err != nil {
+			return "", err
+		}
+		d.acquisitionDir = dir
+	}
+	d.collected = true
+	return d.acquisitionDir, nil
+}
+
+func (s *Session) newAcquisitionDir() (string, error) {
+	wd, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+
+	dir := filepath.Join(wd, uuid.New().String())
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		return "", err
+	}
+
+	return dir, nil
 }
 
 func (s *Session) serveBridge(ln net.Listener, clientId, target string) {
@@ -202,9 +273,18 @@ func (s *Session) disconnected(c meshnet.ClientInfo, err error) {
 
 	if err != nil {
 		fmt.Fprintf(s.out, "device disconnected: %s (%v)\n", c.Name, err)
-		return
+	} else {
+		fmt.Fprintf(s.out, "device disconnected: %s\n", c.Name)
 	}
-	fmt.Fprintf(s.out, "device disconnected: %s\n", c.Name)
+
+	s.mu.Lock()
+	ours := s.capture != nil && s.capture.clientID == c.ID
+	s.mu.Unlock()
+	if ours {
+		if path, _, err := s.StopCapture(); err == nil {
+			fmt.Fprintf(s.out, "capture stopped, device disconnected: %s\n", path)
+		}
+	}
 }
 
 func (s *Session) message(clientID string, m meshnet.Message) {
