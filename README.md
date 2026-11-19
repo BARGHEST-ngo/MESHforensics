@@ -1,5 +1,5 @@
 <div align="center">
-  <img width="269" height="188" alt="MESH" src="https://github.com/user-attachments/assets/03d0b879-ca5e-4a20-af72-533ea3ae2b52" />
+  <img width="269" height="188" alt="MESHadb" src="https://github.com/user-attachments/assets/03d0b879-ca5e-4a20-af72-533ea3ae2b52" />
 
   <p>
     <a href="https://docs.meshforensics.org/"><img src="https://img.shields.io/badge/docs-latest-blue.svg?style=flat-square" alt="Documentation" /></a>
@@ -7,109 +7,194 @@
     <a href="LICENSE"><img src="https://img.shields.io/github/license/BARGHEST-ngo/MESH?style=flat-square" alt="License" /></a>
     <a href="https://github.com/BARGHEST-ngo/MESH/releases"><img src="https://img.shields.io/github/v/release/BARGHEST-ngo/MESH?include_prereleases&style=flat-square" alt="Latest Release" /></a>
   </p>
-  <p><a href="https://docs.meshforensics.org/">DOCS</a> &nbsp;|&nbsp; <a href="https://Barghest.asia">BARGHEST</a></p>
+  <p>
+    <a href="https://play.google.com/store/apps/details?id=com.barghest.mesh"><img height="60" alt="Get it on Google Play" src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" /></a>
+    <a href="https://f-droid.org/en/packages/com.barghest.mesh/"><img height="60" alt="Get it on F-Droid" src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png" /></a>
+  </p>
+  <p><a href="https://docs.meshforensics.org/">DOCS</a> &nbsp;|&nbsp; <a href="https://github.com/BARGHEST-ngo/MESHnet">MESHnet</a> &nbsp;|&nbsp; <a href="https://Barghest.asia">BARGHEST</a></p>
 </div>
 
-**MESHforensics enables internet-routable wireless debugging for mobile devices over an encrypted, censorship-resistant peer-to-peer mesh network.**
+# MESHadb
 
-Mobile devices are often trapped behind NAT, firewalls, or restrictive carrier networks that block direct inbound access. MESHforensics creates an encrypted peer-to-peer overlay and assigns each node a CGNAT-range address via a virtual TUN interface, so devices behave as if they share a private subnet, with no central VPN, port forwarding, or permanent infrastructure.
+**Peer-to-peer ADB over the internet. Reach an Android device's wireless debugging from anywhere, with no port forwarding, no accounts and no server to run.**
 
-This lets analysts run remote mobile forensics over ADB Wireless Debugging and libimobiledevice, using tools like [WARD](https://github.com/BARGHEST-ngo/WARD), [MVT](https://github.com/mvt-project/mvt), and [AndroidQF](https://github.com/mvt-project/androidqf) as if the device were local. MESHforensics also supports remote network monitoring, including PCAP capture and Suricata intrusion detection over the same mesh.
+ADB wireless debugging only works when your computer and the phone share a Wi-Fi network. MESHadb removes that limit. The phone runs a small app, your computer runs a CLI, and the two join an encrypted tunnel using an address and a one-time PIN. From then on, `adb` talks to the phone as if it were on your desk.
 
-Meshes are ephemeral and analyst-controlled: bring devices online, collect, then tear the network down, so nothing is left running to fingerprint.
+- **Peer-to-peer first.** Your computer and the phone connect directly to each other over WireGuard-encrypted UDP, punching through NAT on both sides. There is no VPN hub in the middle.
+- **HTTPS relay when direct fails.** On networks that block UDP or defeat hole punching, traffic falls back to a relay over HTTPS (TCP port 443), which looks like ordinary web traffic. The relay only forwards packets that are already end-to-end encrypted, so it cannot read them.
 
-> [!IMPORTANT]
-> **Public Beta**: under active development. A full penetration test has been completed and major vulnerabilities patched. Breaking changes should be expected, and some technical expertise is required. Report bugs or security concerns via GitHub Issues.
+Sessions are ephemeral. Nothing is persisted, every start gets a new address, and when the session ends the tunnel is gone.
 
-## Getting started
+## What you can do with it
 
-Full documentation: https://docs.meshforensics.org/
+- **Remote support**: help a colleague or relative with their phone without asking them to touch router settings.
+- **Development and QA**: debug an app on a device you do not physically hold.
+- **Field devices**: reach phones and tablets deployed behind NAT or carrier networks.
+- **Mobile forensics**: run a consensual remote acquisition, ready for [WARD](https://github.com/BARGHEST-ngo/WARD) or [MVT](https://github.com/mvt-project/mvt).
+- **Exit node**: send a device's internet traffic out through your machine, to capture and inspect it or to get around a censored network.
 
-Clone the repo first:
+## Quick start
+
+You need:
+
+- [Docker](https://docs.docker.com/get-docker/) and [Task](https://taskfile.dev/installation/) on your computer
+- An Android phone with Wireless debugging (Android 11 or later)
+- The MESHadb app, from [Google Play](https://play.google.com/store/apps/details?id=com.barghest.mesh), [F-Droid](https://f-droid.org/en/packages/com.barghest.mesh/) or the [releases page](https://github.com/BARGHEST-ngo/MESH/releases)
+
+**1. Start the CLI**
 
 ```
-git clone https://github.com/BARGHEST-ngo/mesh.git
+git clone https://github.com/BARGHEST-ngo/MESH.git
 cd MESH
+task analyst
 ```
 
-Then pick how your control plane is reached from the internet.
+It prints a QR code and a MESH address, then drops you at the `meshcli>` prompt.
 
-### Option A: Provisioner service (hosted reverse proxy)
-
-Run the control plane on your workstation and expose it through the MESHforensics provisioner, a hosted reverse-proxy tunnel. Request a provisioner API key from BARGHEST (see https://docs.meshforensics.org/). The provisioner auto-assigns an ephemeral `*.tunnels.meshforensics.app` subdomain and issues your API credentials, so **`task apikey` is not needed** on this path.
+**2. Create a PIN**
 
 ```
-# Choose the "Ephemeral" control plane when prompted
-task build
-task controlPlane
-
-# Open the web UI at the provisioner-assigned URL and log in
+meshcli> pin
+PIN: 123456
 ```
 
-### Option B: Self-hosted reverse proxy
+**3. Join from the phone**
 
-Bring your own ingress (a reverse proxy on an internet-facing server, or a tunneling service such as [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) or [ngrok](https://ngrok.com/)), then mint an API key locally.
+Open the MESHadb app, scan the QR code and enter the PIN.
+
+**4. Pair ADB**
 
 ```
-# Choose the "Persistent" control plane when prompted, and your own domain
-# (or the hostname your Cloudflare Tunnel / ngrok endpoint provides)
-task build
-task controlPlane
-task apikey
-
-# Open the web UI and log in with the API key
-#    Local:  https://localhost
-#    Remote: https://your-domain:8443/login
+meshcli> adbpair
 ```
 
-The web UI uses a self-signed certificate by default. Once logged in, your MESHforensics network is ready to accept nodes. See the docs for node enrollment and forensic workflows.
+On the phone, turn on Wireless debugging and tap *Pair device with pairing code*. Type the code and the two ports into the prompt when asked.
 
-> [!IMPORTANT]
-> The default ACL lets all nodes in a network talk to each other. Production deployments should use restrictive policies, set via the ACL tab.
+**5. Use ADB**
 
-## Architecture
+Open a second terminal:
 
-MESHforensics is a heavily modified fork of [Tailscale](https://github.com/tailscale/tailscale) that does not require Tailscale infrastructure. Peers connect directly via end-to-end encrypted WireGuard using UDP hole punching. When UDP is blocked, traffic fails over to E2EE HTTPS [DERP](https://github.com/tailscale/tailscale/tree/main/derp) relays, which transport packets without visibility into their contents.
+```
+task shell
+adb devices
+adb shell
+```
 
-The control plane handles only peer discovery and key exchange, and forensic traffic flows directly between endpoints whenever possible. Operators can run their own DERP servers (the control plane embeds an implementation), making MESHforensics fully self-hostable. Otherwise it falls back to Tailscale's public DERP servers for connectivity.
+When you are done, run `disconnect` in the CLI, or `task down` to stop everything.
 
-## Key capabilities
+## Commands
 
-- Peer-to-peer encrypted forensic subnets with CGNAT-assigned TUN interfaces
-- Automatic WireGuard / AmneziaWG key management, with optional transport obfuscation against DPI
-- Self-hostable control plane with ACL enforcement
-- ADB-over-WiFi and libimobiledevice compatibility, plus AndroidQF + MVT integration
-- Secure forensic artifact transfer, optional kill-switch containment
-- Rapid mesh creation and teardown
+| Command | What it does |
+| --- | --- |
+| `pin` | Create a one-time PIN so a device can join |
+| `adbpair` | Pair and connect to a device's wireless debugging |
+| `status` | Show the session and its connected devices |
+| `forward on\|off` | Send a device's internet traffic through your machine |
+| `capture start\stop` | Record a device's forwarded traffic to a pcap file |
+| `disconnect` | End a device's session |
+| `adbcollect` | Run a forensic acquisition (see [Forensics](#forensics-censorship-circumvention-and-security-research)) |
+| `adbdisable` | Turn off developer mode on the device |
+| `adbclean` | Clear shell-accessible logs left by a session |
 
-## Why not a VPN like WireGuard?
+Run `help` at the prompt for flags.
 
-MESHforensics is built on WireGuard, but a plain WireGuard VPN is the wrong shape for hostile networks. WireGuard speaks only UDP, and UDP is exactly what censored and restrictive carrier networks degrade or block first. When that happens a raw WireGuard tunnel simply fails, which is unacceptable when an analyst needs to reach a device in the field.
+## How it works
 
-MESHforensics keeps WireGuard for its fast, modern, end-to-end encrypted transport, then adds the connectivity WireGuard lacks on its own. Peers attempt a direct UDP connection via hole punching, and when UDP is blocked they fail over to end-to-end encrypted HTTPS DERP relays. HTTPS relaying is the critical piece: it is indistinguishable from ordinary web traffic, so it survives DPI and UDP censorship that would strand a conventional VPN, while the relay still carries packets without visibility into their contents.
+MESHadb is built on [MESHnet](https://github.com/BARGHEST-ngo/MESHnet), our small Go library for connecting a server to its clients over an encrypted, peer-to-peer tunnel.
 
-Traditional VPN and hub-and-spoke designs also add persistent infrastructure risk, centralized traffic-analysis points, single points of failure, and operational exposure. MESHforensics separates coordination from transport. The control plane carries no forensic traffic, peer connections are direct, relays are fallbacks rather than hubs, and meshes are disposable and task-scoped. It is optimized for transient, high-risk environments rather than permanent enterprise networking.
+```
+  your computer                                           the phone
+┌────────────────┐   1. direct: WireGuard over UDP     ┌────────────────┐
+│ adb ─► meshcli │ ◄═════════════════════════════════► │  MESHadb app   │
+│        bridge  │                                     │  ─► adbd       │
+└───────┬────────┘                                     └────────┬───────┘
+        │         2. fallback: HTTPS relay (TCP 443)            │
+        └──────────────────►  relay  ◄──────────────────────────┘
+                     (sees encrypted packets only)
+```
+
+### Peer-to-peer by default
+
+MESHadb has no central server that carries your traffic. Both ends first reach each other through a relay, use it to exchange their network endpoints, and then punch through NAT to a direct UDP path. Once that path is up, ADB traffic flows straight between your computer and the phone.
+
+### HTTPS relay as the fallback
+
+Direct UDP is not always possible. Carrier-grade NAT, hotel and corporate Wi-Fi, and censored networks often block or degrade it. A plain WireGuard VPN simply stops working there. MESHadb keeps the session alive by sending the same encrypted packets through a [DERP](https://github.com/tailscale/tailscale/tree/main/cmd/derper#derp) relay over HTTPS on TCP port 443.
+
+- The relay is a fallback and a meeting point. It is not a hub, and the connection moves to a direct path whenever one becomes available.
+- Traffic is WireGuard-encrypted end to end between the CLI and the phone. The relay cannot decrypt it.
+- To the network in between, a relayed session is an HTTPS connection.
+
+### A session, step by step
+
+1. `meshcli` starts a MESHnet server and prints its address. Each start gets a new key and a new address.
+2. `pin` creates a 6-digit PIN that admits exactly one device.
+3. The app joins with the address and the PIN. A device with only the address cannot connect.
+4. The two ends connect directly, or through the relay if they cannot.
+5. `adbpair` opens a local port and bridges it, through the tunnel, to the phone's wireless debugging port. `adb` connects to that local port.
+
+## Forensics, Censorship Circumvention and Security Research
+
+MESHadb is developed primarily for remote logical acquisition of forensic artifacts and for network monitoring, in support of forensics, censorship circumvention and security research. We built it to make spyware forensics and security research possible on devices in other countries.
+
+Examples of research it supports:
+
+- **Spyware forensics**: consensual acquisition from the device of a person at risk, wherever they are
+- **Censorship monitoring**: observe blocking and interference from inside the affected network
+- **Censorship circumvention**: give a device on a restricted network a way out through a machine you trust
+- **Carrier services research**: study operator behaviour, preinstalled apps and network configuration on real devices in-country
+- **App and traffic analysis**: capture what an app sends from a device on its real network
+
+**Acquisition**
+
+```
+meshcli> adbcollect
+meshcli> adbcollect --module BackupTar
+meshcli> adbcollect --output /home/mesh/acquisitions/case-01
+```
+
+`adbcollect` runs an ADB acquisition using [AndroidQF](https://github.com/mvt-project/androidqf) and WARD. The output is in the format WARD and MVT expect. Acquisitions are written to `~/mesh-acquisitions` on your computer; set `ACQUISITION_DIR` in `.env` to change that.
+
+**Exit node**
+
+```
+meshcli> forward on
+```
+
+`forward on` makes your machine the device's exit node: its TCP and UDP traffic travels through the encrypted tunnel and reaches the internet from your network. `forward off` returns it to its own connection. This gives you two things:
+
+- **Capture**: the device's traffic passes through your machine, where you can record and inspect it. `tcpdump` and Suricata ship in the image; open `task shell` to run them.  
+Alternatively run `capture start` to save pcap data to the device's acquisition directory
+- **Circumvention**: a device on a censored or hostile network reaches the internet from your location. The local network sees only the tunnel, which falls back to HTTPS when UDP is blocked.
+
+**After the session**
+
+- `adbdisable` turns developer mode off, so the device is not left open to non-consensual extraction.
+- `adbclean` clears logcat buffers and shell-accessible telemetry. Run it only after the acquisition, or you will destroy evidence. It is best effort: the paired ADB key and root-only logs remain on the device.
+
+## Security model
+
+- **The address is a secret.** Share the address and the PIN over separate channels, at least one of them end-to-end encrypted, such as Signal.
+- **PINs are single-use.** One PIN admits one device. Three wrong guesses cancel the pairing.
+- **Nothing persists.** A lost connection is a finished session. The device must rejoin with a new PIN.
+- **Consent.** The person holding the phone installs the app, enters the PIN and enables Wireless debugging themselves. Only use MESHadb on devices whose owner has agreed.
 
 ## Repository structure
 
-- `android-client`: Android endpoint APK
-- `control-plane`: Coordination server
-- `analyst`: Analyst CLI client
+- `analyst`: the `meshcli` command-line client
+- `android-client`: the Android app
+- `docs`: documentation source
 
-## Developer notes
-
-- Development happens on branches, merged via PRs. Releases are cut as versioned tags.
-- GitHub Actions mirrors tagged releases to `mesh-analyst-client`.
-- External Go projects should depend on explicit version tags, not `main`.
+To build the Android app from source, run `make -C android-client apk`.
 
 ## Supported by
 
-<img width="312" height="109" alt="image" src="https://github.com/user-attachments/assets/d9476c43-7414-46e0-b6a5-1956bd6ca1b5" />
+<img width="312" height="109" alt="Open Technology Fund" src="https://github.com/user-attachments/assets/d9476c43-7414-46e0-b6a5-1956bd6ca1b5" />
 
-MESHforensics is supported by the [Open Technology Fund](https://www.opentech.fund/) to support the consensual remote forensics of spyware and surveillance targeting Human Right Defenders.
+MESHadb is supported by the [Open Technology Fund](https://www.opentech.fund/) to support the consensual remote forensics of spyware and surveillance targeting Human Rights Defenders.
 
 ## License
 
-MESHforensics is licensed under the [GNU Affero General Public License v3.0 or later](LICENSE) (AGPL-3.0-or-later). All modifications and additions by BARGHEST are Copyright (c) BARGHEST.
+MESHadb is licensed under the [GNU Affero General Public License v3.0 or later](LICENSE) (AGPL-3.0-or-later). All modifications and additions by BARGHEST are Copyright (c) BARGHEST.
 
-Portions are a derivative work of [Tailscale](https://github.com/tailscale/tailscale) (BSD 3-Clause). AmneziaWG/WireGuard code is MIT-licensed. Original copyrights and licenses are preserved in `.licenses/`. WireGuard is a registered trademark of Jason A. Donenfeld.
+Portions are derived from [AndroidQF](https://github.com/mvt-project/androidqf) under the [MVT License 1.1](https://license.mvt.re/1.1/). Third-party components keep their own copyrights and licenses.
